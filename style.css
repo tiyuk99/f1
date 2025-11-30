@@ -226,6 +226,16 @@ input:checked + .slider:before {
     letter-spacing: 0.5px;
 }
 
+.btn-primary {
+    background: var(--f1-red);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--f1-red-dark);
+    transform: translateY(-1px);
+}
+
 .btn-secondary {
     background: var(--bg-secondary);
     color: var(--text-primary);
