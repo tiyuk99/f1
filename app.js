@@ -45,36 +45,46 @@ async function requestNotificationPermission() {
         if (Notification.permission === 'default') {
             const permission = await Notification.requestPermission();
             console.log('Notification permission:', permission);
+            return permission;
         }
+        return Notification.permission;
     } else {
         console.warn('Browser does not support notifications');
+        return 'unsupported';
     }
 }
 
 // Test notification function
-function testNotification() {
+async function testNotification() {
     if (!('Notification' in window)) {
         alert('Your browser does not support notifications');
         addEventToFeed('System', 'Browser does not support notifications', 'incident');
         return;
     }
     
-    if (Notification.permission === 'denied') {
+    const currentPermission = Notification.permission;
+    console.log('Current notification permission:', currentPermission);
+    
+    if (currentPermission === 'denied') {
         alert('Notifications are blocked. Please enable them in your browser settings.');
         addEventToFeed('System', 'Notifications are blocked - check browser settings', 'incident');
         return;
     }
     
-    if (Notification.permission === 'default') {
-        requestNotificationPermission().then(() => {
-            if (Notification.permission === 'granted') {
-                sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
-                addEventToFeed('System', 'Test notification sent successfully', 'session');
-            }
-        });
-    } else if (Notification.permission === 'granted') {
+    if (currentPermission === 'granted') {
+        // Already granted, just send test notification
         sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
         addEventToFeed('System', 'Test notification sent successfully', 'session');
+    } else {
+        // Need to request permission
+        const permission = await requestNotificationPermission();
+        if (permission === 'granted') {
+            sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
+            addEventToFeed('System', 'Test notification sent successfully', 'session');
+        } else if (permission === 'denied') {
+            alert('You denied notification permission. Please enable it in your browser settings to receive alerts.');
+            addEventToFeed('System', 'Notification permission denied', 'incident');
+        }
     }
 }
 
