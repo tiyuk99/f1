@@ -1,5 +1,5 @@
 // ========================================
-// F1 Race Notifier - Main Application
+// F1 Race Notifier - Enhanced Version
 // ========================================
 
 // Global State Management
@@ -9,14 +9,40 @@ const state = {
     lastRaceControl: [],
     lastPitStops: [],
     isConnected: false,
-    preferences: {
-        overtakes: true,
-        incidents: true,
-        pitStops: true,
-        session: true
+    currentLap: 0,
+    totalLaps: 0,
+    lastTop3ReminderLap: 0,
+    driverCache: {},
+    
+    // Statistics
+    stats: {
+        totalOvertakes: 0,
+        totalPitStops: 0,
+        safetyCars: 0,
+        fastestPitStop: null
     },
-    pollInterval: null,
-    driverCache: {} // Cache driver info: {driver_number: {name, team_name}}
+    
+    // Enhanced Filters
+    filters: {
+        positions: {
+            overtakes: 'top5',  // 'top5', 'top10', 'all'
+            pitStops: 'top5'
+        },
+        teams: ['Ferrari'],  // Array of selected team names
+        incidents: {
+            safetyCar: true,
+            vsc: true,
+            redFlag: true,
+            accidents: true,
+            penalties: true
+        },
+        features: {
+            top3Reminder: true,
+            sessionMilestones: true
+        }
+    },
+    
+    pollInterval: null
 };
 
 // ========================================
@@ -24,14 +50,7 @@ const state = {
 // ========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('F1 Race Notifier initializing...');
-    console.log('Initial notification permission:', Notification.permission);
-    
-    // Don't request permission on load - let user click Test Notification button
-    // Only auto-request if they haven't been asked yet
-    if (Notification.permission === 'default') {
-        console.log('Notification permission not set yet - user needs to click Test Notification');
-    }
+    console.log('F1 Race Notifier Enhanced - Initializing...');
     
     // Load saved preferences
     loadPreferences();
@@ -39,144 +58,218 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup event listeners
     setupEventListeners();
     
+    // Initialize UI components
+    initializeDictionary();
+    
     // Start polling
     startPolling();
 });
 
-// Request browser notification permission
-async function requestNotificationPermission() {
-    if ('Notification' in window) {
-        if (Notification.permission === 'default') {
-            const permission = await Notification.requestPermission();
-            console.log('Notification permission:', permission);
-            return permission;
-        }
-        return Notification.permission;
-    } else {
-        console.warn('Browser does not support notifications');
-        return 'unsupported';
-    }
-}
+// ========================================
+// Event Listeners Setup
+// ========================================
 
-// Test notification function
-async function testNotification() {
-    console.log('=== Test Notification Clicked ===');
-    
-    if (!('Notification' in window)) {
-        alert('Your browser does not support notifications');
-        addEventToFeed('System', 'Browser does not support notifications', 'incident');
-        return;
-    }
-    
-    const currentPermission = Notification.permission;
-    console.log('Current notification permission:', currentPermission);
-    
-    if (currentPermission === 'denied') {
-        alert('Notifications are blocked. Please enable them in your browser settings.');
-        addEventToFeed('System', 'Notifications are blocked - check browser settings', 'incident');
-        return;
-    }
-    
-    if (currentPermission === 'granted') {
-        // Already granted, just send test notification
-        console.log('Permission already granted, sending notification...');
-        setTimeout(() => {
-            sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
-            addEventToFeed('System', '✅ Test notification sent successfully', 'session');
-        }, 100);
-    } else if (currentPermission === 'default') {
-        // Need to request permission
-        console.log('Requesting permission...');
-        addEventToFeed('System', 'Requesting notification permission...', 'session');
-        
-        try {
-            const permission = await Notification.requestPermission();
-            console.log('Permission result:', permission);
-            
-            if (permission === 'granted') {
-                console.log('Permission granted! Sending test notification...');
-                // Wait a moment for permission to fully register
-                setTimeout(() => {
-                    sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.', true);
-                    addEventToFeed('System', '✅ Permission granted! Test notification sent', 'session');
-                }, 200);
-            } else if (permission === 'denied') {
-                console.log('Permission denied');
-                addEventToFeed('System', '❌ Notification permission denied', 'incident');
-            } else {
-                console.log('Permission dismissed/default');
-                addEventToFeed('System', 'Permission dialog dismissed', 'incident');
-            }
-        } catch (error) {
-            console.error('Error requesting permission:', error);
-            addEventToFeed('System', 'Error requesting permission: ' + error.message, 'incident');
-        }
-    }
-}
-
-// Load notification preferences from localStorage
-function loadPreferences() {
-    const saved = localStorage.getItem('f1NotificationPrefs');
-    if (saved) {
-        state.preferences = JSON.parse(saved);
-        
-        // Update UI toggles
-        document.getElementById('toggleOvertakes').checked = state.preferences.overtakes;
-        document.getElementById('toggleIncidents').checked = state.preferences.incidents;
-        document.getElementById('togglePitStops').checked = state.preferences.pitStops;
-        document.getElementById('toggleSession').checked = state.preferences.session;
-    }
-}
-
-// Save notification preferences to localStorage
-function savePreferences() {
-    localStorage.setItem('f1NotificationPrefs', JSON.stringify(state.preferences));
-}
-
-// Setup all event listeners
 function setupEventListeners() {
-    // Toggle switches
-    document.getElementById('toggleOvertakes').addEventListener('change', (e) => {
-        state.preferences.overtakes = e.target.checked;
+    // Sidebar navigation tabs
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            switchTab(tabName);
+        });
+    });
+    
+    // Favorite team selector
+    document.getElementById('favoriteTeam').addEventListener('change', (e) => {
+        changeTheme(e.target.value);
         savePreferences();
     });
     
-    document.getElementById('toggleIncidents').addEventListener('change', (e) => {
-        state.preferences.incidents = e.target.checked;
+    // Position filters
+    document.querySelectorAll('input[name="overtakeFilter"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            state.filters.positions.overtakes = e.target.value;
+            savePreferences();
+        });
+    });
+    
+    document.querySelectorAll('input[name="pitFilter"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            state.filters.positions.pitStops = e.target.value;
+            savePreferences();
+        });
+    });
+    
+    // Team filters
+    document.querySelectorAll('#teamFilters input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const team = e.target.value;
+            if (e.target.checked) {
+                if (!state.filters.teams.includes(team)) {
+                    state.filters.teams.push(team);
+                }
+            } else {
+                state.filters.teams = state.filters.teams.filter(t => t !== team);
+            }
+            savePreferences();
+        });
+    });
+    
+    // Incident filters
+    document.getElementById('incidentSafetyCar').addEventListener('change', (e) => {
+        state.filters.incidents.safetyCar = e.target.checked;
         savePreferences();
     });
     
-    document.getElementById('togglePitStops').addEventListener('change', (e) => {
-        state.preferences.pitStops = e.target.checked;
+    document.getElementById('incidentVSC').addEventListener('change', (e) => {
+        state.filters.incidents.vsc = e.target.checked;
         savePreferences();
     });
     
-    document.getElementById('toggleSession').addEventListener('change', (e) => {
-        state.preferences.session = e.target.checked;
+    document.getElementById('incidentRedFlag').addEventListener('change', (e) => {
+        state.filters.incidents.redFlag = e.target.checked;
+        savePreferences();
+    });
+    
+    document.getElementById('incidentAccident').addEventListener('change', (e) => {
+        state.filters.incidents.accidents = e.target.checked;
+        savePreferences();
+    });
+    
+    document.getElementById('incidentPenalty').addEventListener('change', (e) => {
+        state.filters.incidents.penalties = e.target.checked;
+        savePreferences();
+    });
+    
+    // Feature toggles
+    document.getElementById('top3Reminder').addEventListener('change', (e) => {
+        state.filters.features.top3Reminder = e.target.checked;
+        savePreferences();
+    });
+    
+    document.getElementById('sessionMilestones').addEventListener('change', (e) => {
+        state.filters.features.sessionMilestones = e.target.checked;
         savePreferences();
     });
     
     // Buttons
-    document.getElementById('testNotificationBtn').addEventListener('click', () => {
-        testNotification();
-    });
-    
+    document.getElementById('testNotificationBtn').addEventListener('click', testNotification);
     document.getElementById('refreshBtn').addEventListener('click', () => {
-        addEventToFeed('System', 'Manual refresh triggered', 'session');
+        addEventToTable('System', 'Manual refresh triggered', 'system');
         pollData();
     });
+    document.getElementById('clearBtn').addEventListener('click', clearEventFeed);
     
-    document.getElementById('clearBtn').addEventListener('click', () => {
-        const container = document.getElementById('eventContainer');
-        container.innerHTML = '<p class="empty-state">No events yet. Waiting for race activity...</p>';
+    // Event search
+    document.getElementById('eventSearch').addEventListener('input', (e) => {
+        filterEvents(e.target.value);
     });
+    
+    // Sidebar toggle (mobile)
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+        document.querySelector('.sidebar').classList.toggle('open');
+    });
+}
+
+// ========================================
+// UI Component Functions
+// ========================================
+
+function switchTab(tabName) {
+    // Update nav tabs
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`.nav-tab[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`${tabName}Tab`).classList.add('active');
+}
+
+function changeTheme(teamId) {
+    if (teamId) {
+        document.body.dataset.theme = teamId;
+    } else {
+        delete document.body.dataset.theme;
+    }
+}
+
+function initializeDictionary() {
+    const container = document.getElementById('dictionaryContent');
+    container.innerHTML = '';
+    
+    Object.values(F1_DICTIONARY).forEach(entry => {
+        const entryEl = document.createElement('div');
+        entryEl.className = 'dictionary-entry';
+        entryEl.innerHTML = `
+            <div class="dictionary-term">${entry.term}</div>
+            <div class="dictionary-definition">${entry.definition}</div>
+            <div class="dictionary-example">${entry.example}</div>
+        `;
+        container.appendChild(entryEl);
+    });
+}
+
+// ========================================
+// Preferences Management
+// ========================================
+
+function loadPreferences() {
+    const saved = localStorage.getItem('f1NotificationPrefs');
+    if (saved) {
+        try {
+            const prefs = JSON.parse(saved);
+            
+            // Load filters
+            if (prefs.filters) {
+                state.filters = { ...state.filters, ...prefs.filters };
+                
+                // Apply position filters
+                document.querySelector(`input[name="overtakeFilter"][value="${state.filters.positions.overtakes}"]`).checked = true;
+                document.querySelector(`input[name="pitFilter"][value="${state.filters.positions.pitStops}"]`).checked = true;
+                
+                // Apply team filters
+                document.querySelectorAll('#teamFilters input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.checked = state.filters.teams.includes(checkbox.value);
+                });
+                
+                // Apply incident filters
+                document.getElementById('incidentSafetyCar').checked = state.filters.incidents.safetyCar;
+                document.getElementById('incidentVSC').checked = state.filters.incidents.vsc;
+                document.getElementById('incidentRedFlag').checked = state.filters.incidents.redFlag;
+                document.getElementById('incidentAccident').checked = state.filters.incidents.accidents;
+                document.getElementById('incidentPenalty').checked = state.filters.incidents.penalties;
+                
+                // Apply feature toggles
+                document.getElementById('top3Reminder').checked = state.filters.features.top3Reminder;
+                document.getElementById('sessionMilestones').checked = state.filters.features.sessionMilestones;
+            }
+            
+            // Load theme
+            if (prefs.theme) {
+                document.getElementById('favoriteTeam').value = prefs.theme;
+                changeTheme(prefs.theme);
+            }
+        } catch (e) {
+            console.error('Error loading preferences:', e);
+        }
+    }
+}
+
+function savePreferences() {
+    const prefs = {
+        filters: state.filters,
+        theme: document.getElementById('favoriteTeam').value
+    };
+    localStorage.setItem('f1NotificationPrefs', JSON.stringify(prefs));
 }
 
 // ========================================
 // API Integration
 // ========================================
 
-// Fetch latest session from OpenF1 API
 async function fetchLatestSession() {
     try {
         const response = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
@@ -189,7 +282,6 @@ async function fetchLatestSession() {
     }
 }
 
-// Fetch driver positions
 async function fetchPositions(sessionKey) {
     try {
         const response = await fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`);
@@ -201,7 +293,6 @@ async function fetchPositions(sessionKey) {
     }
 }
 
-// Fetch race control messages
 async function fetchRaceControl(sessionKey) {
     try {
         const response = await fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`);
@@ -213,7 +304,6 @@ async function fetchRaceControl(sessionKey) {
     }
 }
 
-// Fetch pit stop data
 async function fetchPitStops(sessionKey) {
     try {
         const response = await fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`);
@@ -225,14 +315,12 @@ async function fetchPitStops(sessionKey) {
     }
 }
 
-// Fetch driver data for caching
 async function fetchDrivers(sessionKey) {
     try {
         const response = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const drivers = await response.json();
         
-        // Cache driver info by driver_number
         drivers.forEach(driver => {
             state.driverCache[driver.driver_number] = {
                 name: `${driver.first_name} ${driver.last_name}`,
@@ -248,73 +336,81 @@ async function fetchDrivers(sessionKey) {
     }
 }
 
+async function fetchLaps(sessionKey) {
+    try {
+        const response = await fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching laps:', error);
+        return [];
+    }
+}
+
 // ========================================
 // Polling Logic
 // ========================================
 
 function startPolling() {
-    // Initial poll
     pollData();
-    
-    // Poll every 2 seconds
     state.pollInterval = setInterval(pollData, 2000);
 }
 
 async function pollData() {
     try {
-        // Fetch latest session
         const session = await fetchLatestSession();
         
         if (!session) {
-            updateConnectionStatus(false, 'No active session found');
+            updateConnectionStatus(false, 'No active session');
             return;
         }
         
-        // Update connection status
         updateConnectionStatus(true);
         
-        // Check if session changed
         const sessionChanged = !state.currentSession || 
                               state.currentSession.session_key !== session.session_key;
         
         if (sessionChanged) {
             console.log('New session detected:', session);
             state.currentSession = session;
-            
-            // Reset tracking data
             state.lastPositions = {};
             state.lastRaceControl = [];
             state.lastPitStops = [];
+            state.lastTop3ReminderLap = 0;
             
-            // Fetch and cache driver data
+            // Reset statistics
+            state.stats = {
+                totalOvertakes: 0,
+                totalPitStops: 0,
+                safetyCars: 0,
+                fastestPitStop: null
+            };
+            updateStatistics();
+            
             await fetchDrivers(session.session_key);
-            
-            // Update session UI
             updateSessionInfo(session);
             
-            // Notify session start
-            if (state.preferences.session) {
-                const message = `${session.session_name} - ${session.session_type} has started`;
-                sendNotification('Race Start', message);
-                addEventToFeed('Session Start', message, 'session');
+            if (state.filters.features.sessionMilestones) {
+                sendNotification('Session Start', `${session.session_name} - ${session.session_type} has started`, true);
+                addEventToTable('Session Start', `${session.session_name} - ${session.session_type} has started`, 'session');
             }
         }
         
-        // Only poll data if session is in progress
         if (session.session_key) {
-            // Fetch all data in parallel
-            const [positions, raceControl, pitStops] = await Promise.all([
+            const [positions, raceControl, pitStops, laps] = await Promise.all([
                 fetchPositions(session.session_key),
                 fetchRaceControl(session.session_key),
-                fetchPitStops(session.session_key)
+                fetchPitStops(session.session_key),
+                fetchLaps(session.session_key)
             ]);
             
-            // Process data for events
+            updateLapInfo(laps);
+            updateLeaderboard(positions);
             detectOvertakes(positions);
             detectIncidents(raceControl);
             detectPitStops(pitStops);
+            checkTop3Reminder(positions);
             
-            // Update last updated timestamp
             updateLastUpdated();
         }
         
@@ -328,16 +424,9 @@ async function pollData() {
 // Event Detection Logic
 // ========================================
 
-/**
- * Detect overtakes by comparing current positions with last known positions
- * Filter: Only notify for top 5 positions OR Ferrari drivers
- */
 function detectOvertakes(positions) {
-    if (!state.preferences.overtakes || !positions || positions.length === 0) {
-        return;
-    }
+    if (!positions || positions.length === 0) return;
     
-    // Get latest position for each driver
     const latestPositions = {};
     positions.forEach(p => {
         if (!latestPositions[p.driver_number] || 
@@ -346,54 +435,44 @@ function detectOvertakes(positions) {
         }
     });
     
-    // Compare with last positions to detect overtakes
     if (Object.keys(state.lastPositions).length > 0) {
         Object.entries(latestPositions).forEach(([driverNum, current]) => {
             const last = state.lastPositions[driverNum];
             
-            if (last && last.position !== current.position) {
-                // Position changed - possible overtake
-                const currentPos = current.position;
-                const lastPos = last.position;
+            if (last && last.position !== current.position && current.position < last.position) {
+                const driver = state.driverCache[driverNum];
+                const driverName = driver ? driver.nameCode : `Driver ${driverNum}`;
+                const teamName = driver ? driver.team_name : '';
                 
-                // Check if this is a genuine overtake (moved up)
-                if (currentPos < lastPos) {
-                    // Get driver info
-                    const driver = state.driverCache[driverNum];
-                    const driverName = driver ? driver.nameCode : `Driver ${driverNum}`;
-                    const teamName = driver ? driver.team_name : '';
+                // Apply filters
+                const posFilter = state.filters.positions.overtakes;
+                const passesPositionFilter = 
+                    posFilter === 'all' ||
+                    (posFilter === 'top5' && current.position <= 5) ||
+                    (posFilter === 'top10' && current.position <= 10);
+                
+                const passesTeamFilter = state.filters.teams.length === 0 || 
+                                        state.filters.teams.some(t => teamName.includes(t));
+                
+                if (passesPositionFilter && passesTeamFilter) {
+                    const message = `${driverName} moved from P${last.position} to P${current.position}`;
+                    sendNotification('Overtake', message, true);
+                    addEventToTable('Overtake', message, 'overtake');
                     
-                    // FILTER: Only notify if top 5 OR Ferrari
-                    const isTop5 = currentPos <= 5;
-                    const isFerrari = teamName && teamName.toLowerCase().includes('ferrari');
-                    
-                    if (isTop5 || isFerrari) {
-                        const message = `${driverName} moved from P${lastPos} to P${currentPos}`;
-                        sendNotification('Overtake', message);
-                        addEventToFeed('Overtake', message, 'overtake');
-                    }
+                    state.stats.totalOvertakes++;
+                    updateStatistics();
                 }
             }
         });
     }
     
-    // Update last positions
     state.lastPositions = latestPositions;
 }
 
-/**
- * Detect incidents from race control messages
- * Keywords: SAFETY CAR, VIRTUAL SAFETY CAR, RED FLAG, ACCIDENT, COLLISION
- * Filter: None (all incidents are notified)
- */
 function detectIncidents(raceControl) {
-    if (!state.preferences.incidents || !raceControl || raceControl.length === 0) {
-        return;
-    }
+    if (!raceControl || raceControl.length === 0) return;
     
-    // Check for new race control messages
     raceControl.forEach(msg => {
-        // Check if we've already seen this message
         const alreadySeen = state.lastRaceControl.some(
             old => old.date === msg.date && old.message === msg.message
         );
@@ -401,83 +480,184 @@ function detectIncidents(raceControl) {
         if (!alreadySeen) {
             const msgUpper = msg.message.toUpperCase();
             
-            // Check for incident keywords
-            const keywords = [
-                'SAFETY CAR',
-                'VIRTUAL SAFETY CAR',
-                'RED FLAG',
-                'ACCIDENT',
-                'COLLISION',
-                'VSC',
-                'SC DEPLOYED'
-            ];
+            const keywords = {
+                safetyCar: ['SAFETY CAR DEPLOYED', 'SC DEPLOYED', 'SAFETY CAR IN THIS LAP'],
+                vsc: ['VIRTUAL SAFETY CAR', 'VSC'],
+                redFlag: ['RED FLAG'],
+                accidents: ['ACCIDENT', 'COLLISION', 'INCIDENT'],
+                penalties: ['PENALTY', 'INVESTIGATION', 'NO FURTHER ACTION']
+            };
             
-            const hasIncidentKeyword = keywords.some(keyword => 
-                msgUpper.includes(keyword)
-            );
+            let shouldNotify = false;
+            let incidentType = 'Incident';
             
-            if (hasIncidentKeyword) {
-                sendNotification('Incident', msg.message);
-                addEventToFeed('Incident', msg.message, 'incident');
+            if (state.filters.incidents.safetyCar && keywords.safetyCar.some(k => msgUpper.includes(k))) {
+                shouldNotify = true;
+                incidentType = 'Safety Car';
+                state.stats.safetyCars++;
+                updateStatistics();
+            } else if (state.filters.incidents.vsc && keywords.vsc.some(k => msgUpper.includes(k))) {
+                shouldNotify = true;
+                incidentType = 'VSC';
+            } else if (state.filters.incidents.redFlag && keywords.redFlag.some(k => msgUpper.includes(k))) {
+                shouldNotify = true;
+                incidentType = 'Red Flag';
+            } else if (state.filters.incidents.accidents && keywords.accidents.some(k => msgUpper.includes(k))) {
+                shouldNotify = true;
+                incidentType = 'Incident';
+            } else if (state.filters.incidents.penalties && keywords.penalties.some(k => msgUpper.includes(k))) {
+                shouldNotify = true;
+                incidentType = 'Penalty';
+            }
+            
+            if (shouldNotify) {
+                sendNotification(incidentType, msg.message, true);
+                addEventToTable(incidentType, msg.message, 'incident');
             }
         }
     });
     
-    // Update last race control messages
     state.lastRaceControl = raceControl;
 }
 
-/**
- * Detect new pit stops
- * Filter: Only notify for top 5 drivers OR Ferrari drivers
- */
 function detectPitStops(pitStops) {
-    if (!state.preferences.pitStops || !pitStops || pitStops.length === 0) {
-        return;
-    }
+    if (!pitStops || pitStops.length === 0) return;
     
-    // Check for new pit stops
     pitStops.forEach(pit => {
-        // Check if we've already seen this pit stop
         const alreadySeen = state.lastPitStops.some(
             old => old.date === pit.date && old.driver_number === pit.driver_number
         );
         
         if (!alreadySeen) {
-            // Get driver info
             const driver = state.driverCache[pit.driver_number];
             const driverName = driver ? driver.nameCode : `Driver ${pit.driver_number}`;
             const teamName = driver ? driver.team_name : '';
             
-            // Get current position (from lastPositions)
             const currentPos = state.lastPositions[pit.driver_number]?.position || '?';
             
-            // FILTER: Only notify if top 5 OR Ferrari
-            const isTop5 = currentPos !== '?' && currentPos <= 5;
-            const isFerrari = teamName && teamName.toLowerCase().includes('ferrari');
+            // Apply filters
+            const posFilter = state.filters.positions.pitStops;
+            const passesPositionFilter = 
+                posFilter === 'all' ||
+                (posFilter === 'top5' && currentPos !== '?' && currentPos <= 5) ||
+                (posFilter === 'top10' && currentPos !== '?' && currentPos <= 10);
             
-            if (isTop5 || isFerrari) {
+            const passesTeamFilter = state.filters.teams.length === 0 || 
+                                    state.filters.teams.some(t => teamName.includes(t));
+            
+            if (passesPositionFilter && passesTeamFilter) {
                 const message = `${driverName} (P${currentPos}) pitted on Lap ${pit.lap_number || '?'}`;
-                sendNotification('Pit Stop', message);
-                addEventToFeed('Pit Stop', message, 'pitstop');
+                sendNotification('Pit Stop', message, true);
+                addEventToTable('Pit Stop', message, 'pitstop');
+                
+                state.stats.totalPitStops++;
+                
+                // Track fastest pit stop
+                if (pit.pit_duration && (!state.stats.fastestPitStop || pit.pit_duration < state.stats.fastestPitStop)) {
+                    state.stats.fastestPitStop = pit.pit_duration;
+                }
+                
+                updateStatistics();
             }
         }
     });
     
-    // Update last pit stops
     state.lastPitStops = pitStops;
+}
+
+function checkTop3Reminder(positions) {
+    if (!state.filters.features.top3Reminder) return;
+    if (!positions || positions.length === 0) return;
+    
+    // Get current lap from latest position data
+    const latestPos = positions[positions.length - 1];
+    if (!latestPos || !latestPos.date) return;
+    
+    const currentLap = state.currentLap;
+    
+    // Check if we should send reminder (every 10 laps, but not same lap twice)
+    if (currentLap > 0 && currentLap % 10 === 0 && currentLap !== state.lastTop3ReminderLap) {
+        state.lastTop3ReminderLap = currentLap;
+        
+        // Get top 3 drivers
+        const latestPositions = {};
+        positions.forEach(p => {
+            if (!latestPositions[p.driver_number] || 
+                new Date(p.date) > new Date(latestPositions[p.driver_number].date)) {
+                latestPositions[p.driver_number] = p;
+            }
+        });
+        
+        const sorted = Object.values(latestPositions).sort((a, b) => a.position - b.position);
+        const top3 = sorted.slice(0, 3).map(p => {
+            const driver = state.driverCache[p.driver_number];
+            return driver ? driver.nameCode : `Driver ${p.driver_number}`;
+        });
+        
+        if (top3.length >= 3) {
+            const message = `Lap ${currentLap} - Top 3: 1. ${top3[0]}, 2. ${top3[1]}, 3. ${top3[2]}`;
+            sendNotification('Top 3 Update', message, true);
+            addEventToTable('Top 3 Update', message, 'system');
+        }
+    }
 }
 
 // ========================================
 // Notification System
 // ========================================
 
-/**
- * Send browser desktop notification
- * @param {string} type - Notification type
- * @param {string} message - Notification message
- * @param {boolean} forceShow - Force show even if permission seems not granted (for testing)
- */
+async function testNotification() {
+    console.log('=== Test Notification Clicked ===');
+    
+    if (!('Notification' in window)) {
+        alert('Your browser does not support notifications');
+        addEventToTable('System', 'Browser does not support notifications', 'system');
+        return;
+    }
+    
+    const currentPermission = Notification.permission;
+    console.log('Current notification permission:', currentPermission);
+    
+    if (currentPermission === 'denied') {
+        alert('Notifications are blocked. Please enable them in your browser settings.');
+        addEventToTable('System', 'Notifications are blocked - check browser settings', 'system');
+        return;
+    }
+    
+    if (currentPermission === 'granted') {
+        console.log('Permission already granted, sending notification...');
+        setTimeout(() => {
+            sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.', true);
+            addEventToTable('System', '✓ Test notification sent successfully', 'system');
+        }, 100);
+    } else if (currentPermission === 'default') {
+        console.log('Requesting permission...');
+        addEventToTable('System', 'Requesting notification permission...', 'system');
+        
+        try {
+            const permission = await Notification.requestPermission();
+            console.log('Permission result:', permission);
+            
+            if (permission === 'granted') {
+                console.log('Permission granted! Sending test notification...');
+                setTimeout(() => {
+                    sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.', true);
+                    addEventToTable('System', '✓ Permission granted! Test notification sent', 'system');
+                }, 200);
+            } else if (permission === 'denied') {
+                console.log('Permission denied');
+                addEventToTable('System', '✗ Notification permission denied', 'system');
+            } else {
+                console.log('Permission dismissed/default');
+                addEventToTable('System', 'Permission dialog dismissed', 'system');
+            }
+        } catch (error) {
+            console.error('Error requesting permission:', error);
+            addEventToTable('System', 'Error requesting permission: ' + error.message, 'system');
+        }
+    }
+}
+
 function sendNotification(type, message, forceShow = false) {
     console.log('sendNotification called:', type, message);
     console.log('Notification permission check:', Notification.permission);
@@ -487,7 +667,6 @@ function sendNotification(type, message, forceShow = false) {
         return;
     }
     
-    // For local files, permission might not persist, so try anyway if forceShow is true
     if (Notification.permission === 'granted' || forceShow) {
         try {
             console.log('Creating notification...');
@@ -510,7 +689,6 @@ function sendNotification(type, message, forceShow = false) {
                 console.error('Notification error:', error);
             };
             
-            // Auto-close after 6 seconds
             setTimeout(() => {
                 try {
                     notification.close();
@@ -520,7 +698,6 @@ function sendNotification(type, message, forceShow = false) {
             }, 6000);
         } catch (error) {
             console.error('Error creating notification:', error);
-            alert('Notification error: ' + error.message + '\n\nYou need to serve this from a web server (not file://). Run: python3 -m http.server 8000');
         }
     } else {
         console.warn('Notification permission not granted:', Notification.permission);
@@ -528,77 +705,162 @@ function sendNotification(type, message, forceShow = false) {
 }
 
 // ========================================
-// UI Updates
+// UI Update Functions
 // ========================================
 
-/**
- * Update connection status indicator
- */
 function updateConnectionStatus(connected, message = '') {
     state.isConnected = connected;
-    const badge = document.getElementById('statusBadge');
+    const statusDot = document.querySelector('.status-dot');
+    const statusText = document.querySelector('.status-text');
     
     if (connected) {
-        badge.className = 'badge connected';
-        badge.textContent = 'Connected';
+        statusDot.classList.add('connected');
+        statusText.textContent = 'Connected';
     } else {
-        badge.className = 'badge disconnected';
-        badge.textContent = message || 'Disconnected';
+        statusDot.classList.remove('connected');
+        statusText.textContent = message || 'Disconnected';
     }
 }
 
-/**
- * Update session information display
- */
 function updateSessionInfo(session) {
-    const container = document.getElementById('sessionDetails');
-    
-    container.innerHTML = `
-        <p><strong>Race:</strong> ${session.meeting_name || 'Unknown'}</p>
-        <p><strong>Session:</strong> ${session.session_name || 'Unknown'} (${session.session_type || 'Unknown'})</p>
-        <p><strong>Status:</strong> ${session.session_type || 'In Progress'}</p>
-        <p><strong>Location:</strong> ${session.location || session.country_name || 'Unknown'}</p>
-    `;
+    const sessionName = document.getElementById('sessionName');
+    sessionName.textContent = `${session.meeting_name} - ${session.session_name}`;
 }
 
-/**
- * Add event to the live feed
- */
-function addEventToFeed(type, message, category) {
-    const container = document.getElementById('eventContainer');
+function updateLapInfo(laps) {
+    if (!laps || laps.length === 0) return;
+    
+    // Get latest lap
+    const latestLap = laps.reduce((max, lap) => {
+        return (lap.lap_number > max) ? lap.lap_number : max;
+    }, 0);
+    
+    state.currentLap = latestLap;
+    
+    // Estimate total laps (you might need to adjust this based on session type)
+    if (state.totalLaps === 0 && state.currentSession) {
+        // Default lap counts by circuit (approximate)
+        state.totalLaps = 57; // Default, will vary by circuit
+    }
+    
+    document.getElementById('currentLap').textContent = state.currentLap || '-';
+    document.getElementById('totalLaps').textContent = state.totalLaps || '-';
+    
+    // Update progress bar
+    if (state.currentLap && state.totalLaps) {
+        const progress = (state.currentLap / state.totalLaps) * 100;
+        document.getElementById('progressBar').style.width = `${Math.min(progress, 100)}%`;
+        
+        // Update race phase
+        const phase = document.getElementById('racePhase');
+        if (progress < 25) {
+            phase.textContent = 'Early Laps';
+        } else if (progress < 50) {
+            phase.textContent = 'First Stint';
+        } else if (progress < 75) {
+            phase.textContent = 'Mid-Race';
+        } else if (progress < 90) {
+            phase.textContent = 'Final Stint';
+        } else {
+            phase.textContent = 'Final Laps';
+        }
+    }
+}
+
+function updateLeaderboard(positions) {
+    if (!positions || positions.length === 0) return;
+    
+    // Get latest position for each driver
+    const latestPositions = {};
+    positions.forEach(p => {
+        if (!latestPositions[p.driver_number] || 
+            new Date(p.date) > new Date(latestPositions[p.driver_number].date)) {
+            latestPositions[p.driver_number] = p;
+        }
+    });
+    
+    // Sort by position
+    const sorted = Object.values(latestPositions).sort((a, b) => a.position - b.position);
+    const top10 = sorted.slice(0, 10);
+    
+    const tbody = document.getElementById('leaderboardBody');
+    tbody.innerHTML = '';
+    
+    top10.forEach(pos => {
+        const driver = state.driverCache[pos.driver_number];
+        const driverName = driver ? driver.nameCode : `Driver ${pos.driver_number}`;
+        const teamName = driver ? driver.team_name : '-';
+        
+        // Calculate gap (placeholder - would need timing data)
+        let gap = '-';
+        if (pos.position > 1) {
+            gap = '+?.???s';
+        } else {
+            gap = 'Leader';
+        }
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td class="col-pos">${pos.position}</td>
+            <td class="col-driver">${driverName}</td>
+            <td class="col-team">${teamName}</td>
+            <td class="col-gap">${gap}</td>
+            <td class="col-tire"><span class="tire-badge tire-medium">MED</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function addEventToTable(type, message, category) {
+    const tbody = document.getElementById('eventTableBody');
     
     // Remove empty state if present
-    const emptyState = container.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
+    const emptyRow = tbody.querySelector('.empty-row');
+    if (emptyRow) {
+        emptyRow.remove();
     }
     
-    // Create event item
-    const eventItem = document.createElement('div');
-    eventItem.className = 'event-item';
-    
+    const row = document.createElement('tr');
     const timestamp = new Date().toLocaleTimeString();
     
-    eventItem.innerHTML = `
-        <div class="event-content">
-            <div class="event-type ${category}">${type}</div>
-            <div class="event-message">${message}</div>
-        </div>
-        <div class="event-time">${timestamp}</div>
+    row.innerHTML = `
+        <td class="col-time">${timestamp}</td>
+        <td class="col-type"><span class="event-type-badge ${category}">${type}</span></td>
+        <td class="col-details">${message}</td>
     `;
     
     // Add to top of feed
-    container.insertBefore(eventItem, container.firstChild);
+    tbody.insertBefore(row, tbody.firstChild);
     
-    // Limit to 100 events
-    while (container.children.length > 100) {
-        container.removeChild(container.lastChild);
+    // Limit to 200 events
+    while (tbody.children.length > 200) {
+        tbody.removeChild(tbody.lastChild);
     }
 }
 
-/**
- * Update last updated timestamp
- */
+function clearEventFeed() {
+    const tbody = document.getElementById('eventTableBody');
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="3" class="empty-cell">No events yet. Waiting for race activity...</td></tr>';
+}
+
+function filterEvents(searchTerm) {
+    const rows = document.querySelectorAll('#eventTableBody tr:not(.empty-row)');
+    const term = searchTerm.toLowerCase();
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(term) ? '' : 'none';
+    });
+}
+
+function updateStatistics() {
+    document.getElementById('statOvertakes').textContent = state.stats.totalOvertakes;
+    document.getElementById('statPitStops').textContent = state.stats.totalPitStops;
+    document.getElementById('statSafetyCars').textContent = state.stats.safetyCars;
+    document.getElementById('statFastestPit').textContent = 
+        state.stats.fastestPitStop ? `${state.stats.fastestPitStop.toFixed(2)}s` : '-';
+}
+
 function updateLastUpdated() {
     const element = document.getElementById('lastUpdated');
     const now = new Date().toLocaleTimeString();
@@ -609,10 +871,8 @@ function updateLastUpdated() {
 // Cleanup
 // ========================================
 
-// Clear interval on page unload
 window.addEventListener('beforeunload', () => {
     if (state.pollInterval) {
         clearInterval(state.pollInterval);
     }
 });
-

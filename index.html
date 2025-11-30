@@ -5,83 +5,331 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>F1 Race Notifier</title>
     <link rel="icon" type="image/svg+xml" href="f1-icon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <h1>🏎️ F1 Race Notifier</h1>
-            <div class="connection-status">
-                <span id="statusBadge" class="badge disconnected">Disconnected</span>
+    <!-- Main App Container -->
+    <div class="app-container">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1 class="app-title">F1 LIVE</h1>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
             </div>
-        </header>
 
-        <!-- Session Info Card -->
-        <section class="card session-info">
-            <h2>Current Session</h2>
-            <div id="sessionDetails">
-                <p class="loading">Connecting to OpenF1 API...</p>
+            <!-- Navigation Tabs -->
+            <nav class="sidebar-nav">
+                <button class="nav-tab active" data-tab="monitor">
+                    <span class="icon">📊</span>
+                    <span>Monitor</span>
+                </button>
+                <button class="nav-tab" data-tab="dictionary">
+                    <span class="icon">📖</span>
+                    <span>F1 Terms</span>
+                </button>
+                <button class="nav-tab" data-tab="statistics">
+                    <span class="icon">📈</span>
+                    <span>Statistics</span>
+                </button>
+            </nav>
+
+            <!-- Monitor Tab Content -->
+            <div class="tab-content active" id="monitorTab">
+                
+                <!-- Team Theme Selector -->
+                <section class="sidebar-section">
+                    <h3 class="section-title">Favorite Team</h3>
+                    <select id="favoriteTeam" class="team-select">
+                        <option value="">Default Theme</option>
+                        <option value="ferrari">Ferrari</option>
+                        <option value="redbull">Red Bull</option>
+                        <option value="mercedes">Mercedes</option>
+                        <option value="mclaren">McLaren</option>
+                        <option value="astonmartin">Aston Martin</option>
+                        <option value="alpine">Alpine</option>
+                        <option value="williams">Williams</option>
+                        <option value="rb">RB</option>
+                        <option value="sauber">Sauber</option>
+                        <option value="haas">Haas</option>
+                    </select>
+                </section>
+
+                <!-- Position Filters -->
+                <section class="sidebar-section">
+                    <h3 class="section-title">Position Filters</h3>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Overtakes</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="overtakeFilter" value="top5" checked>
+                                <span>Top 5</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="overtakeFilter" value="top10">
+                                <span>Top 10</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="overtakeFilter" value="all">
+                                <span>All</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">Pit Stops</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="pitFilter" value="top5" checked>
+                                <span>Top 5</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="pitFilter" value="top10">
+                                <span>Top 10</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="pitFilter" value="all">
+                                <span>All</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Team Filters -->
+                <section class="sidebar-section">
+                    <h3 class="section-title">Follow Teams</h3>
+                    <div class="team-checkboxes" id="teamFilters">
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Ferrari" checked>
+                            <span class="team-badge ferrari">Ferrari</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Red Bull Racing">
+                            <span class="team-badge redbull">Red Bull</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Mercedes">
+                            <span class="team-badge mercedes">Mercedes</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="McLaren">
+                            <span class="team-badge mclaren">McLaren</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Aston Martin">
+                            <span class="team-badge astonmartin">Aston Martin</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Alpine">
+                            <span class="team-badge alpine">Alpine</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Williams">
+                            <span class="team-badge williams">Williams</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="RB">
+                            <span class="team-badge rb">RB</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Sauber">
+                            <span class="team-badge sauber">Sauber</span>
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" value="Haas">
+                            <span class="team-badge haas">Haas</span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Incident Filters -->
+                <section class="sidebar-section">
+                    <h3 class="section-title">Incidents</h3>
+                    <div class="toggle-list">
+                        <label class="toggle-option">
+                            <input type="checkbox" id="incidentSafetyCar" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Safety Car</span>
+                        </label>
+                        <label class="toggle-option">
+                            <input type="checkbox" id="incidentVSC" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Virtual Safety Car</span>
+                        </label>
+                        <label class="toggle-option">
+                            <input type="checkbox" id="incidentRedFlag" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Red Flag</span>
+                        </label>
+                        <label class="toggle-option">
+                            <input type="checkbox" id="incidentAccident" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Accidents/Collisions</span>
+                        </label>
+                        <label class="toggle-option">
+                            <input type="checkbox" id="incidentPenalty" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Penalties</span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Additional Features -->
+                <section class="sidebar-section">
+                    <h3 class="section-title">Additional Alerts</h3>
+                    <div class="toggle-list">
+                        <label class="toggle-option">
+                            <input type="checkbox" id="top3Reminder" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Top 3 Every 10 Laps</span>
+                        </label>
+                        <label class="toggle-option">
+                            <input type="checkbox" id="sessionMilestones" checked>
+                            <span class="toggle-slider"></span>
+                            <span>Session Milestones</span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Test Notification -->
+                <div class="sidebar-footer">
+                    <button id="testNotificationBtn" class="btn btn-primary btn-block">
+                        Test Notification
+                    </button>
+                </div>
             </div>
-        </section>
 
-        <!-- Notification Settings -->
-        <section class="card notification-settings">
-            <h2>Notification Settings</h2>
-            <p class="info-text">Overtakes & pit stops: Top 5 + Ferrari only</p>
-            <div class="toggle-group">
-                <div class="toggle-item">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggleOvertakes" checked>
-                        <span class="slider"></span>
-                    </label>
-                    <label for="toggleOvertakes">Overtakes (Top 5 + Ferrari)</label>
+            <!-- Dictionary Tab Content -->
+            <div class="tab-content" id="dictionaryTab">
+                <div class="dictionary-content" id="dictionaryContent">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Statistics Tab Content -->
+            <div class="tab-content" id="statisticsTab">
+                <div class="statistics-content" id="statisticsContent">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Overtakes</div>
+                        <div class="stat-value" id="statOvertakes">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Pit Stops</div>
+                        <div class="stat-value" id="statPitStops">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Safety Cars</div>
+                        <div class="stat-value" id="statSafetyCars">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Fastest Pit Stop</div>
+                        <div class="stat-value" id="statFastestPit">-</div>
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Header Bar -->
+            <header class="main-header">
+                <div class="session-info-compact">
+                    <div class="session-status" id="sessionStatus">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Connecting...</span>
+                    </div>
+                    <div class="session-name" id="sessionName">-</div>
+                </div>
+                <div class="header-actions">
+                    <button id="refreshBtn" class="btn btn-icon" title="Refresh">🔄</button>
+                </div>
+            </header>
+
+            <!-- Race Progress -->
+            <section class="race-progress-section">
+                <div class="progress-header">
+                    <div class="lap-info">
+                        <span class="lap-label">Lap</span>
+                        <span class="lap-current" id="currentLap">-</span>
+                        <span class="lap-separator">/</span>
+                        <span class="lap-total" id="totalLaps">-</span>
+                    </div>
+                    <div class="progress-phase" id="racePhase">-</div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+            </section>
+
+            <!-- Live Leaderboard -->
+            <section class="leaderboard-section">
+                <h2 class="section-heading">Live Leaderboard</h2>
+                <div class="leaderboard-table-wrapper">
+                    <table class="leaderboard-table" id="leaderboardTable">
+                        <thead>
+                            <tr>
+                                <th class="col-pos">Pos</th>
+                                <th class="col-driver">Driver</th>
+                                <th class="col-team">Team</th>
+                                <th class="col-gap">Gap</th>
+                                <th class="col-tire">Tire</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            <tr class="loading-row">
+                                <td colspan="5" class="loading-cell">Waiting for race data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Event Feed -->
+            <section class="event-feed-section">
+                <div class="feed-header">
+                    <h2 class="section-heading">Event Feed</h2>
+                    <div class="feed-controls">
+                        <input type="text" id="eventSearch" class="search-input" placeholder="Search events...">
+                        <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                    </div>
                 </div>
                 
-                <div class="toggle-item">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggleIncidents" checked>
-                        <span class="slider"></span>
-                    </label>
-                    <label for="toggleIncidents">Crashes/Incidents (SC, VSC, Red Flags)</label>
+                <div class="event-table-wrapper">
+                    <table class="event-table" id="eventTable">
+                        <thead>
+                            <tr>
+                                <th class="col-time">Time</th>
+                                <th class="col-type">Type</th>
+                                <th class="col-details">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventTableBody">
+                            <tr class="empty-row">
+                                <td colspan="3" class="empty-cell">No events yet. Waiting for race activity...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-                
-                <div class="toggle-item">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="togglePitStops" checked>
-                        <span class="slider"></span>
-                    </label>
-                    <label for="togglePitStops">Pit Stops (Top 5 + Ferrari)</label>
-                </div>
-                
-                <div class="toggle-item">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggleSession" checked>
-                        <span class="slider"></span>
-                    </label>
-                    <label for="toggleSession">Race Start/End</label>
-                </div>
-            </div>
-        </section>
 
-        <!-- Event Feed -->
-        <section class="card event-feed">
-            <div class="feed-header">
-                <h2>Live Event Feed</h2>
-                <div class="feed-controls">
-                    <button id="testNotificationBtn" class="btn btn-primary">🔔 Test Notification</button>
-                    <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
-                    <button id="clearBtn" class="btn btn-danger">Clear Events</button>
+                <div class="feed-footer">
+                    <span class="last-updated" id="lastUpdated">Last updated: Never</span>
                 </div>
-            </div>
-            <div id="lastUpdated" class="last-updated">Last updated: Never</div>
-            <div id="eventContainer" class="event-container">
-                <p class="empty-state">No events yet. Waiting for race activity...</p>
-            </div>
-        </section>
+            </section>
+
+        </main>
     </div>
 
+    <script src="teams.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
-
