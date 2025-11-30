@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Race Notifier</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🏎️ F1 Race Notifier</h1>
+            <div class="connection-status">
+                <span id="statusBadge" class="badge disconnected">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Session Info Card -->
+        <section class="card session-info">
+            <h2>Current Session</h2>
+            <div id="sessionDetails">
+                <p class="loading">Connecting to OpenF1 API...</p>
+            </div>
+        </section>
+
+        <!-- Notification Settings -->
+        <section class="card notification-settings">
+            <h2>Notification Settings</h2>
+            <p class="info-text">Overtakes & pit stops: Top 5 + Ferrari only</p>
+            <div class="toggle-group">
+                <div class="toggle-item">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleOvertakes" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label for="toggleOvertakes">Overtakes (Top 5 + Ferrari)</label>
+                </div>
+                
+                <div class="toggle-item">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleIncidents" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label for="toggleIncidents">Crashes/Incidents (SC, VSC, Red Flags)</label>
+                </div>
+                
+                <div class="toggle-item">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="togglePitStops" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label for="togglePitStops">Pit Stops (Top 5 + Ferrari)</label>
+                </div>
+                
+                <div class="toggle-item">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleSession" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label for="toggleSession">Race Start/End</label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Event Feed -->
+        <section class="card event-feed">
+            <div class="feed-header">
+                <h2>Live Event Feed</h2>
+                <div class="feed-controls">
+                    <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+                    <button id="clearBtn" class="btn btn-danger">Clear Events</button>
+                </div>
+            </div>
+            <div id="lastUpdated" class="last-updated">Last updated: Never</div>
+            <div id="eventContainer" class="event-container">
+                <p class="empty-state">No events yet. Waiting for race activity...</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
