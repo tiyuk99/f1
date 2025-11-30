@@ -97,7 +97,7 @@ async function testNotification() {
                 console.log('Permission granted! Sending test notification...');
                 // Wait a moment for permission to fully register
                 setTimeout(() => {
-                    sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
+                    sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.', true);
                     addEventToFeed('System', '✅ Permission granted! Test notification sent', 'session');
                 }, 200);
             } else if (permission === 'denied') {
@@ -474,8 +474,11 @@ function detectPitStops(pitStops) {
 
 /**
  * Send browser desktop notification
+ * @param {string} type - Notification type
+ * @param {string} message - Notification message
+ * @param {boolean} forceShow - Force show even if permission seems not granted (for testing)
  */
-function sendNotification(type, message) {
+function sendNotification(type, message, forceShow = false) {
     console.log('sendNotification called:', type, message);
     console.log('Notification permission check:', Notification.permission);
     
@@ -484,14 +487,16 @@ function sendNotification(type, message) {
         return;
     }
     
-    // Check permission - accept both 'granted' and 'default' after user clicked allow
-    if (Notification.permission === 'granted') {
+    // For local files, permission might not persist, so try anyway if forceShow is true
+    if (Notification.permission === 'granted' || forceShow) {
         try {
             console.log('Creating notification...');
-            const notification = new Notification(`🏎️ ${type}`, {
+            const notification = new Notification(`F1: ${type}`, {
                 body: message,
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🏎️</text></svg>',
-                requireInteraction: false
+                icon: '/f1-icon.svg',
+                badge: '/f1-icon.svg',
+                requireInteraction: false,
+                silent: false
             });
             
             console.log('Notification created successfully:', notification);
@@ -515,6 +520,7 @@ function sendNotification(type, message) {
             }, 6000);
         } catch (error) {
             console.error('Error creating notification:', error);
+            alert('Notification error: ' + error.message + '\n\nYou need to serve this from a web server (not file://). Run: python3 -m http.server 8000');
         }
     } else {
         console.warn('Notification permission not granted:', Notification.permission);
