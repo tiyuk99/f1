@@ -80,8 +80,10 @@ async function testNotification() {
     if (currentPermission === 'granted') {
         // Already granted, just send test notification
         console.log('Permission already granted, sending notification...');
-        sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
-        addEventToFeed('System', '✅ Test notification sent successfully', 'session');
+        setTimeout(() => {
+            sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
+            addEventToFeed('System', '✅ Test notification sent successfully', 'session');
+        }, 100);
     } else if (currentPermission === 'default') {
         // Need to request permission
         console.log('Requesting permission...');
@@ -93,8 +95,11 @@ async function testNotification() {
             
             if (permission === 'granted') {
                 console.log('Permission granted! Sending test notification...');
-                sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
-                addEventToFeed('System', '✅ Permission granted! Test notification sent', 'session');
+                // Wait a moment for permission to fully register
+                setTimeout(() => {
+                    sendNotification('Test', 'Notifications are working! You\'ll receive alerts during live races.');
+                    addEventToFeed('System', '✅ Permission granted! Test notification sent', 'session');
+                }, 200);
             } else if (permission === 'denied') {
                 console.log('Permission denied');
                 addEventToFeed('System', '❌ Notification permission denied', 'incident');
@@ -471,17 +476,48 @@ function detectPitStops(pitStops) {
  * Send browser desktop notification
  */
 function sendNotification(type, message) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-        const notification = new Notification(`🏎️ ${type}`, {
-            body: message,
-            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🏎️</text></svg>',
-            badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🏎️</text></svg>',
-            tag: `f1-${Date.now()}`,
-            requireInteraction: false
-        });
-        
-        // Auto-close after 5 seconds
-        setTimeout(() => notification.close(), 5000);
+    console.log('sendNotification called:', type, message);
+    console.log('Notification permission check:', Notification.permission);
+    
+    if (!('Notification' in window)) {
+        console.error('Notifications not supported');
+        return;
+    }
+    
+    // Check permission - accept both 'granted' and 'default' after user clicked allow
+    if (Notification.permission === 'granted') {
+        try {
+            console.log('Creating notification...');
+            const notification = new Notification(`🏎️ ${type}`, {
+                body: message,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🏎️</text></svg>',
+                requireInteraction: false
+            });
+            
+            console.log('Notification created successfully:', notification);
+            
+            notification.onclick = function() {
+                window.focus();
+                this.close();
+            };
+            
+            notification.onerror = function(error) {
+                console.error('Notification error:', error);
+            };
+            
+            // Auto-close after 6 seconds
+            setTimeout(() => {
+                try {
+                    notification.close();
+                } catch (e) {
+                    console.log('Notification already closed');
+                }
+            }, 6000);
+        } catch (error) {
+            console.error('Error creating notification:', error);
+        }
+    } else {
+        console.warn('Notification permission not granted:', Notification.permission);
     }
 }
 
